@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<!-- saved from url=(0436)https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&X-Amz-Date=20210504T125312Z&X-Amz-Expires=600&X-Amz-SignedHeaders=host&response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4 -->
+<html lang="en"><script>
+    window[Symbol.for('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')] = new (class PostClient {
+    constructor(name, destination) {
+        this.name = name;
+        this.destination = destination;
+        this.serverListeners = {};
+        this.bgRequestsListeners = {};
+        this.bgEventsListeners = {};
+        window.addEventListener('message', (message) => {
+            const data = message.data;
+            const isNotForMe = !(data.destination && data.destination === this.name);
+            const hasNotEventProp = !data.event;
+            if (isNotForMe || hasNotEventProp) {
+                return;
+            }
+            if (data.event === 'MARIO_POST_SERVER__BG_RESPONSE') {
+                const response = data.args;
+                if (this.hasBgRequestListener(response.requestId)) {
+                    try {
+                        this.bgRequestsListeners[response.requestId](response.response);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                    delete this.bgRequestsListeners[response.requestId];
+                }
+            }
+            else if (data.event === 'MARIO_POST_SERVER__BG_EVENT') {
+                const response = data.args;
+                if (this.hasBgEventListener(response.event)) {
+                    try {
+                        this.bgEventsListeners[data.id](response.payload);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                }
+            }
+            else if (this.hasServerListener(data.event)) {
+                try {
+                    this.serverListeners[data.event](data.args);
+                }
+                catch (e) {
+                    console.log(e);
+                }
+            }
+            else {
+                console.log(`event not handled: ${data.event}`);
+            }
+        });
+    }
+    emitToServer(event, args) {
+        const id = this.generateUIID();
+        const message = {
+            args,
+            destination: this.destination,
+            event,
+            id,
+        };
+        window.postMessage(message, location.origin);
+        return id;
+    }
+    emitToBg(bgEventName, args) {
+        const requestId = this.generateUIID();
+        const request = { bgEventName, requestId, args };
+        this.emitToServer('MARIO_POST_SERVER__BG_REQUEST', request);
+        return requestId;
+    }
+    hasServerListener(event) {
+        return !!this.serverListeners[event];
+    }
+    hasBgRequestListener(requestId) {
+        return !!this.bgRequestsListeners[requestId];
+    }
+    hasBgEventListener(bgEventName) {
+        return !!this.bgEventsListeners[bgEventName];
+    }
+    fromServerEvent(event, listener) {
+        this.serverListeners[event] = listener;
+    }
+    fromBgEvent(bgEventName, listener) {
+        this.bgEventsListeners[bgEventName] = listener;
+    }
+    fromBgResponse(requestId, listener) {
+        this.bgRequestsListeners[requestId] = listener;
+    }
+    generateUIID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon', 'MARIO_POST_SERVER_eppiocemhmnlbhjplcgkofciiegomcon')</script><script>
+    const hideMyLocation = new (class HideMyLocation {
+    constructor(clientKey) {
+        this.clientKey = clientKey;
+        this.watchIDs = {};
+        this.client = window[Symbol.for(clientKey)];
+        const getCurrentPosition = navigator.geolocation.getCurrentPosition;
+        const watchPosition = navigator.geolocation.watchPosition;
+        const clearWatch = navigator.geolocation.clearWatch;
+        const self = this;
+        navigator.geolocation.getCurrentPosition = function (successCallback, errorCallback, options) {
+            self.handle(getCurrentPosition, 'GET', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.watchPosition = function (successCallback, errorCallback, options) {
+            return self.handle(watchPosition, 'WATCH', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.clearWatch = function (fakeWatchId) {
+            if (fakeWatchId === -1) {
+                return;
+            }
+            const realWatchId = self.watchIDs[fakeWatchId];
+            delete self.watchIDs[fakeWatchId];
+            return clearWatch.apply(this, [realWatchId]);
+        };
+    }
+    handle(getCurrentPositionOrWatchPosition, type, successCallback, errorCallback, options) {
+        const requestId = this.client.emitToBg('HIDE_MY_LOCATION__GET_LOCATION');
+        let fakeWatchId = this.getRandomInt(0, 100000);
+        this.client.fromBgResponse(requestId, (response) => {
+            if (response.enabled) {
+                if (response.status === 'SUCCESS') {
+                    const position = this.map(response);
+                    successCallback(position);
+                }
+                else {
+                    const error = this.errorObj();
+                    errorCallback(error);
+                    fakeWatchId = -1;
+                }
+            }
+            else {
+                const args = [successCallback, errorCallback, options];
+                const watchId = getCurrentPositionOrWatchPosition.apply(navigator.geolocation, args);
+                if (type === 'WATCH') {
+                    this.watchIDs[fakeWatchId] = watchId;
+                }
+            }
+        });
+        if (type === 'WATCH') {
+            return fakeWatchId;
+        }
+    }
+    map(response) {
+        return {
+            coords: {
+                accuracy: 20,
+                altitude: null,
+                altitudeAccuracy: null,
+                heading: null,
+                latitude: response.latitude,
+                longitude: response.longitude,
+                speed: null,
+            },
+            timestamp: Date.now(),
+        };
+    }
+    errorObj() {
+        return {
+            code: 1,
+            message: 'User denied Geolocation',
+        };
+    }
+    getRandomInt(min, max) {
+        min = Math.ceil(min);
+        max = Math.floor(max);
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')
+  </script><!--
+        "Selectors"
+        Selectors helps targeting elements in the DOM.
+        They are useful bot on CSS & JS.
+        Here you'll find a lot of exercises about it.
+
+        IMPORTANT: you can't ADD classes or IDs to help you out! 
+
+        To test them out, just add a "color" or "border" or "background-color" to the rule
+
+        10 CSS Exercises
+        10 JS Exercises
+    --><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <style>
+      /*
+            EX1) Write a selector to target the title of the page
+            EX2) Write a selector to target every children of the navbar
+            EX3) Write a selector to target the "continue reading..." inside the jumbotron
+            EX4) Write a selector to target the first blogpost
+            EX5) Write a selector to target the "even" links in the navbar
+            EX6) Write a selector to target the last blog post
+            EX7) Write a selector to target all the li into the first ordered-list in the sidebar ( Archives )
+            EX8) Write a selector to target the second post author
+            EX9) Write a selector to target the "back to top" link     #### EXTRA Try doing it without targeting the footer element directly
+            EX10) Write a selector to target the footer
+        */
+    </style>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="">
+    <meta name="author" content="Mark Otto, Jacob Thornton, and Bootstrap contributors">
+    <meta name="generator" content="Jekyll v3.8.5">
+    <title>Blog Template · Bootstrap</title>
+
+    <link rel="canonical" href="https://getbootstrap.com/docs/4.3/examples/blog/">
+
+    <!-- Bootstrap core CSS -->
+    <link rel="stylesheet" href="./Blog Template · Bootstrap_files/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+
+    <style>
+      .bd-placeholder-img {
+        font-size: 1.125rem;
+        text-anchor: middle;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+      }
+
+      @media (min-width: 768px) {
+        .bd-placeholder-img-lg {
+          font-size: 3.5rem;
+        }
+      }
+    </style>
+    <link href="./Blog Template · Bootstrap_files/css" rel="stylesheet">
+  <script>(function inject() {
+        var open = XMLHttpRequest.prototype.open;
+
+        XMLHttpRequest.prototype.open = function () {
+          this.requestMethod = arguments[0];
+          open.apply(this, arguments);
+        };
+
+        var send = XMLHttpRequest.prototype.send;
+
+        XMLHttpRequest.prototype.send = function () {
+          var onreadystatechange = this.onreadystatechange;
+
+          this.onreadystatechange = function () {
+            function GenerateQuickId() {
+              var randomStrId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+              return randomStrId.substring(0, 22);
+            }
+
+            try {
+              if (this.readyState === 4) {
+                var id = 'detector';
+                var mes = {
+                  posdMessageId: 'PANELOS_MESSAGE',
+                  posdHash: GenerateQuickId(),
+                  type: 'VIDEO_XHR_CANDIDATE',
+                  from: id,
+                  to: id.substring(0, id.length - 2),
+                  content: {
+                    requestMethod: this.requestMethod,
+                    url: this.responseURL,
+                    type: this.getResponseHeader('content-type'),
+                    content: this.response
+                  }
+                };
+                window.postMessage(mes, '*');
+              }
+            } catch (e) {}
+
+            if (onreadystatechange) {
+              return onreadystatechange.apply(this, arguments);
+            }
+          };
+
+          return send.apply(this, arguments);
+        };
+      })();</script></head>
+
+  <body bis_register="W3sibWFzdGVyIjp0cnVlLCJleHRlbnNpb25JZCI6ImVwcGlvY2VtaG1ubGJoanBsY2drb2ZjaWllZ29tY29uIiwiYWRibG9ja2VyU3RhdHVzIjp7IkRJU1BMQVkiOiJlbmFibGVkIiwiRkFDRUJPT0siOiJlbmFibGVkIiwiVFdJVFRFUiI6ImVuYWJsZWQifSwidmVyc2lvbiI6IjEuOC4wIiwic2NvcmUiOjEwODAwMH1d" data-new-gr-c-s-check-loaded="14.1008.0" data-gr-ext-installed="">
+    <div class="container" bis_skin_checked="1">
+      <header class="blog-header py-3">
+        <div class="row flex-nowrap justify-content-between align-items-center" bis_skin_checked="1">
+          <div class="col-4 pt-1" bis_skin_checked="1">
+            <a class="text-muted" href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">Subscribe</a>
+          </div>
+          <div class="col-4 text-center" bis_skin_checked="1">
+            <a class="blog-header-logo text-dark" href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">Large</a>
+          </div>
+          <div class="col-4 d-flex justify-content-end align-items-center" bis_skin_checked="1">
+            <a class="text-muted" href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="mx-3" role="img" viewBox="0 0 24 24" focusable="false">
+                <title>Search</title>
+                <circle cx="10.5" cy="10.5" r="7.5"></circle>
+                <path d="M21 21l-5.2-5.2"></path>
+              </svg>
+            </a>
+            <a class="btn btn-sm btn-outline-secondary" href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">Sign up</a>
+          </div>
+        </div>
+      </header>
+
+      <div class="nav-scroller py-1 mb-2" bis_skin_checked="1">
+        <nav class="nav d-flex justify-content-between">
+          <a class="p-2 text-muted" href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">World</a>
+          <a class="p-2 text-muted" href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">U.S.</a>
+          <a class="p-2 text-muted" href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">Technology</a>
+          <a class="p-2 text-muted" href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">Design</a>
+          <a class="p-2 text-muted" href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">Culture</a>
+          <a class="p-2 text-muted" href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">Business</a>
+          <a class="p-2 text-muted" href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">Politics</a>
+          <a class="p-2 text-muted" href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">Opinion</a>
+          <a class="p-2 text-muted" href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">Science</a>
+          <a class="p-2 text-muted" href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">Health</a>
+          <a class="p-2 text-muted" href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">Style</a>
+          <a class="p-2 text-muted" href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">Travel</a>
+        </nav>
+      </div>
+
+      <div class="jumbotron p-4 p-md-5 text-white rounded bg-dark" bis_skin_checked="1">
+        <div class="col-md-6 px-0" bis_skin_checked="1">
+          <h1 class="display-4 font-italic">
+            Title of a longer featured blog post
+          </h1>
+          <p class="lead my-3">
+            Multiple lines of text that form the lede, informing new readers
+            quickly and efficiently about what’s most interesting in this post’s
+            contents.
+          </p>
+          <p class="lead mb-0">
+            <a href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#" class="text-white font-weight-bold">Continue reading...</a>
+          </p>
+        </div>
+      </div>
+
+      <div class="row mb-2" bis_skin_checked="1">
+        <div class="col-md-6" bis_skin_checked="1">
+          <div class="row no-gutters border rounded overflow-hidden flex-md-row mb-4 shadow-sm h-md-250 position-relative" bis_skin_checked="1">
+            <div class="col p-4 d-flex flex-column position-static" bis_skin_checked="1">
+              <strong class="d-inline-block mb-2 text-primary">World</strong>
+              <h3 class="mb-0">Featured post</h3>
+              <div class="mb-1 text-muted" bis_skin_checked="1">Nov 12</div>
+              <p class="card-text mb-auto">
+                This is a wider card with supporting text below as a natural
+                lead-in to additional content.
+              </p>
+              <a href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#" class="stretched-link">Continue reading</a>
+            </div>
+            <div class="col-auto d-none d-lg-block" bis_skin_checked="1">
+              <svg class="bd-placeholder-img" width="200" height="250" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" focusable="false" role="img" aria-label="Placeholder: Thumbnail">
+                <title>Placeholder</title>
+                <rect width="100%" height="100%" fill="#55595c"></rect>
+                <text x="50%" y="50%" fill="#eceeef" dy=".3em">Thumbnail</text>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6" bis_skin_checked="1">
+          <div class="row no-gutters border rounded overflow-hidden flex-md-row mb-4 shadow-sm h-md-250 position-relative" bis_skin_checked="1">
+            <div class="col p-4 d-flex flex-column position-static" bis_skin_checked="1">
+              <strong class="d-inline-block mb-2 text-success">Design</strong>
+              <h3 class="mb-0">Post title</h3>
+              <div class="mb-1 text-muted" bis_skin_checked="1">Nov 11</div>
+              <p class="mb-auto">
+                This is a wider card with supporting text below as a natural
+                lead-in to additional content.
+              </p>
+              <a href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#" class="stretched-link">Continue reading</a>
+            </div>
+            <div class="col-auto d-none d-lg-block" bis_skin_checked="1">
+              <svg class="bd-placeholder-img" width="200" height="250" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" focusable="false" role="img" aria-label="Placeholder: Thumbnail">
+                <title>Placeholder</title>
+                <rect width="100%" height="100%" fill="#55595c"></rect>
+                <text x="50%" y="50%" fill="#eceeef" dy=".3em">Thumbnail</text>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <main role="main" class="container">
+      <div class="row" bis_skin_checked="1">
+        <div class="col-md-8 blog-main" bis_skin_checked="1">
+          <h3 class="pb-4 mb-4 font-italic border-bottom">From the Firehose</h3>
+
+          <div class="blog-post" bis_skin_checked="1">
+            <h2 class="blog-post-title">Sample blog post</h2>
+            <p class="blog-post-meta">
+              January 1, 2014 by <a href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">Mark</a>
+            </p>
+
+            <p>
+              This blog post shows a few different types of content that’s
+              supported and styled with Bootstrap. Basic typography, images, and
+              code are all supported.
+            </p>
+            <hr>
+            <p>
+              Cum sociis natoque penatibus et magnis
+              <a href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">dis parturient montes</a>, nascetur ridiculus mus.
+              Aenean eu leo quam. Pellentesque ornare sem lacinia quam venenatis
+              vestibulum. Sed posuere consectetur est at lobortis. Cras mattis
+              consectetur purus sit amet fermentum.
+            </p>
+            <blockquote>
+              <p>
+                Curabitur blandit tempus porttitor.
+                <strong>Nullam quis risus eget urna mollis</strong> ornare vel
+                eu leo. Nullam id dolor id nibh ultricies vehicula ut id elit.
+              </p>
+            </blockquote>
+            <p>
+              Etiam porta <em>sem malesuada magna</em> mollis euismod. Cras
+              mattis consectetur purus sit amet fermentum. Aenean lacinia
+              bibendum nulla sed consectetur.
+            </p>
+            <h2>Heading</h2>
+            <p>
+              Vivamus sagittis lacus vel augue laoreet rutrum faucibus dolor
+              auctor. Duis mollis, est non commodo luctus, nisi erat porttitor
+              ligula, eget lacinia odio sem nec elit. Morbi leo risus, porta ac
+              consectetur ac, vestibulum at eros.
+            </p>
+            <h3>Sub-heading</h3>
+            <p>
+              Cum sociis natoque penatibus et magnis dis parturient montes,
+              nascetur ridiculus mus.
+            </p>
+            <pre><code>Example code block</code></pre>
+            <p>
+              Aenean lacinia bibendum nulla sed consectetur. Etiam porta sem
+              malesuada magna mollis euismod. Fusce dapibus, tellus ac cursus
+              commodo, tortor mauris condimentum nibh, ut fermentum massa.
+            </p>
+            <h3>Sub-heading</h3>
+            <p>
+              Cum sociis natoque penatibus et magnis dis parturient montes,
+              nascetur ridiculus mus. Aenean lacinia bibendum nulla sed
+              consectetur. Etiam porta sem malesuada magna mollis euismod. Fusce
+              dapibus, tellus ac cursus commodo, tortor mauris condimentum nibh,
+              ut fermentum massa justo sit amet risus.
+            </p>
+            <ul>
+              <li>
+                Praesent commodo cursus magna, vel scelerisque nisl consectetur
+                et.
+              </li>
+              <li>Donec id elit non mi porta gravida at eget metus.</li>
+              <li>Nulla vitae elit libero, a pharetra augue.</li>
+            </ul>
+            <p>
+              Donec ullamcorper nulla non metus auctor fringilla. Nulla vitae
+              elit libero, a pharetra augue.
+            </p>
+            <ol>
+              <li>Vestibulum id ligula porta felis euismod semper.</li>
+              <li>
+                Cum sociis natoque penatibus et magnis dis parturient montes,
+                nascetur ridiculus mus.
+              </li>
+              <li>
+                Maecenas sed diam eget risus varius blandit sit amet non magna.
+              </li>
+            </ol>
+            <p>
+              Cras mattis consectetur purus sit amet fermentum. Sed posuere
+              consectetur est at lobortis.
+            </p>
+          </div>
+          <!-- /.blog-post -->
+
+          <div class="blog-post" bis_skin_checked="1">
+            <h2 class="blog-post-title">Another blog post</h2>
+            <p class="blog-post-meta">
+              December 23, 2013 by <a href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">Jacob</a>
+            </p>
+
+            <p>
+              Cum sociis natoque penatibus et magnis
+              <a href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">dis parturient montes</a>, nascetur ridiculus mus.
+              Aenean eu leo quam. Pellentesque ornare sem lacinia quam venenatis
+              vestibulum. Sed posuere consectetur est at lobortis. Cras mattis
+              consectetur purus sit amet fermentum.
+            </p>
+            <blockquote>
+              <p>
+                Curabitur blandit tempus porttitor.
+                <strong>Nullam quis risus eget urna mollis</strong> ornare vel
+                eu leo. Nullam id dolor id nibh ultricies vehicula ut id elit.
+              </p>
+            </blockquote>
+            <p>
+              Etiam porta <em>sem malesuada magna</em> mollis euismod. Cras
+              mattis consectetur purus sit amet fermentum. Aenean lacinia
+              bibendum nulla sed consectetur.
+            </p>
+            <p>
+              Vivamus sagittis lacus vel augue laoreet rutrum faucibus dolor
+              auctor. Duis mollis, est non commodo luctus, nisi erat porttitor
+              ligula, eget lacinia odio sem nec elit. Morbi leo risus, porta ac
+              consectetur ac, vestibulum at eros.
+            </p>
+          </div>
+          <!-- /.blog-post -->
+
+          <div class="blog-post" bis_skin_checked="1">
+            <h2 class="blog-post-title">New feature</h2>
+            <p class="blog-post-meta">
+              December 14, 2013 by <a href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">Chris</a>
+            </p>
+
+            <p>
+              Cum sociis natoque penatibus et magnis dis parturient montes,
+              nascetur ridiculus mus. Aenean lacinia bibendum nulla sed
+              consectetur. Etiam porta sem malesuada magna mollis euismod. Fusce
+              dapibus, tellus ac cursus commodo, tortor mauris condimentum nibh,
+              ut fermentum massa justo sit amet risus.
+            </p>
+            <ul>
+              <li>
+                Praesent commodo cursus magna, vel scelerisque nisl consectetur
+                et.
+              </li>
+              <li>Donec id elit non mi porta gravida at eget metus.</li>
+              <li>Nulla vitae elit libero, a pharetra augue.</li>
+            </ul>
+            <p>
+              Etiam porta <em>sem malesuada magna</em> mollis euismod. Cras
+              mattis consectetur purus sit amet fermentum. Aenean lacinia
+              bibendum nulla sed consectetur.
+            </p>
+            <p>
+              Donec ullamcorper nulla non metus auctor fringilla. Nulla vitae
+              elit libero, a pharetra augue.
+            </p>
+          </div>
+          <!-- /.blog-post -->
+
+          <nav class="blog-pagination">
+            <a class="btn btn-outline-primary" href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">Older</a>
+            <a class="btn btn-outline-secondary disabled" href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#" tabindex="-1" aria-disabled="true">Newer</a>
+          </nav>
+        </div>
+        <!-- /.blog-main -->
+
+        <aside class="col-md-4 blog-sidebar">
+          <div class="p-4 mb-3 bg-light rounded" bis_skin_checked="1">
+            <h4 class="font-italic">About</h4>
+            <p class="mb-0">
+              Etiam porta <em>sem malesuada magna</em> mollis euismod. Cras
+              mattis consectetur purus sit amet fermentum. Aenean lacinia
+              bibendum nulla sed consectetur.
+            </p>
+          </div>
+
+          <div class="p-4" bis_skin_checked="1">
+            <h4 class="font-italic">Archives</h4>
+            <ol class="list-unstyled mb-0">
+              <li><a href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">March 2014</a></li>
+              <li><a href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">February 2014</a></li>
+              <li><a href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">January 2014</a></li>
+              <li><a href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">December 2013</a></li>
+              <li><a href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">November 2013</a></li>
+              <li><a href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">October 2013</a></li>
+              <li><a href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">September 2013</a></li>
+              <li><a href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">August 2013</a></li>
+              <li><a href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">July 2013</a></li>
+              <li><a href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">June 2013</a></li>
+              <li><a href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">May 2013</a></li>
+              <li><a href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">April 2013</a></li>
+            </ol>
+          </div>
+
+          <div class="p-4" bis_skin_checked="1">
+            <h4 class="font-italic">Elsewhere</h4>
+            <ol class="list-unstyled">
+              <li><a href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">GitHub</a></li>
+              <li><a href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">Twitter</a></li>
+              <li><a href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">Facebook</a></li>
+            </ol>
+          </div>
+        </aside>
+        <!-- /.blog-sidebar -->
+      </div>
+      <!-- /.row -->
+    </main>
+    <!-- /.container -->
+
+    <footer class="blog-footer">
+      <p>
+        Blog template built for
+        <a href="https://getbootstrap.com/">Bootstrap</a> by
+        <a href="https://twitter.com/mdo">@mdo</a>.
+      </p>
+      <p>
+        <a href="https://s3.eu-west-1.amazonaws.com/eduflow-production/activity-resources/353731835510277.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2TAWW44RCEE6YREN%2F20210504%2Feu-west-1%2Fs3%2Faws4_request&amp;X-Amz-Date=20210504T125312Z&amp;X-Amz-Expires=600&amp;X-Amz-SignedHeaders=host&amp;response-content-disposition=inline%3B%20filename%2A%3DUTF-8%27%27index.html&amp;X-Amz-Signature=c281e202f576574a1616d826ac9f740f4845ff80c4e89d2b3e0f581b148339b4#">Back to top</a>
+      </p>
+    </footer>
+
+    <script>
+      /*
+        JS Exercises
+        EX11) Write a function to add a new link into the navbar
+        EX12) Write a function to change the color of the main title
+        EX13) Write a function to change the background of the jumbotron
+        EX14) Write a function to remove all the links under "Elsewhere"
+        EX15) Write a function to change the column size for post headings
+        EX16) Write a function to remove the "Search" magnifying glass icon
+        EX17) Write a function to trim just the first 50 characters in the first paragraph for each blog post
+        EX18) Write a function and attach it to the "Newer" button, to add new Blog Post (just div and title)
+        EX19) Write a function and attach it to the "Older" button, to remove the last Blog Post
+        EX20) Write an alert with the name of the author every time the user hover with the mouse over an author name
+    */
+    </script>
+  
+
+</body><script>
+    window[Symbol.for('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')] = new (class PostClient {
+    constructor(name, destination) {
+        this.name = name;
+        this.destination = destination;
+        this.serverListeners = {};
+        this.bgRequestsListeners = {};
+        this.bgEventsListeners = {};
+        window.addEventListener('message', (message) => {
+            const data = message.data;
+            const isNotForMe = !(data.destination && data.destination === this.name);
+            const hasNotEventProp = !data.event;
+            if (isNotForMe || hasNotEventProp) {
+                return;
+            }
+            if (data.event === 'MARIO_POST_SERVER__BG_RESPONSE') {
+                const response = data.args;
+                if (this.hasBgRequestListener(response.requestId)) {
+                    try {
+                        this.bgRequestsListeners[response.requestId](response.response);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                    delete this.bgRequestsListeners[response.requestId];
+                }
+            }
+            else if (data.event === 'MARIO_POST_SERVER__BG_EVENT') {
+                const response = data.args;
+                if (this.hasBgEventListener(response.event)) {
+                    try {
+                        this.bgEventsListeners[data.id](response.payload);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                }
+            }
+            else if (this.hasServerListener(data.event)) {
+                try {
+                    this.serverListeners[data.event](data.args);
+                }
+                catch (e) {
+                    console.log(e);
+                }
+            }
+            else {
+                console.log(`event not handled: ${data.event}`);
+            }
+        });
+    }
+    emitToServer(event, args) {
+        const id = this.generateUIID();
+        const message = {
+            args,
+            destination: this.destination,
+            event,
+            id,
+        };
+        window.postMessage(message, location.origin);
+        return id;
+    }
+    emitToBg(bgEventName, args) {
+        const requestId = this.generateUIID();
+        const request = { bgEventName, requestId, args };
+        this.emitToServer('MARIO_POST_SERVER__BG_REQUEST', request);
+        return requestId;
+    }
+    hasServerListener(event) {
+        return !!this.serverListeners[event];
+    }
+    hasBgRequestListener(requestId) {
+        return !!this.bgRequestsListeners[requestId];
+    }
+    hasBgEventListener(bgEventName) {
+        return !!this.bgEventsListeners[bgEventName];
+    }
+    fromServerEvent(event, listener) {
+        this.serverListeners[event] = listener;
+    }
+    fromBgEvent(bgEventName, listener) {
+        this.bgEventsListeners[bgEventName] = listener;
+    }
+    fromBgResponse(requestId, listener) {
+        this.bgRequestsListeners[requestId] = listener;
+    }
+    generateUIID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon', 'MARIO_POST_SERVER_eppiocemhmnlbhjplcgkofciiegomcon')</script><script>
+    new (class PageContext {
+    constructor(clientKey) {
+        this.client = window[Symbol.for(clientKey)];
+        this.bindEvents();
+    }
+    bindEvents() {
+        const self = this;
+        history.pushState = (f => function pushState() {
+            const ret = f.apply(this, arguments);
+            self.onUrlChange();
+            return ret;
+        })(history.pushState);
+        let firstReplaceEvent = true;
+        history.replaceState = (f => function replaceState(params) {
+            var ret = f.apply(this, arguments);
+            if (!firstReplaceEvent) {
+                self.onUrlChange();
+            }
+            firstReplaceEvent = false;
+            return ret;
+        })(history.replaceState);
+        window.addEventListener('hashchange', function () {
+            self.onUrlChange();
+        });
+    }
+    onUrlChange() {
+        this.client.emitToBg('URLS_SAFE_CHECK__CONTENT_URL_REWRITED');
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')
+</script></html>
